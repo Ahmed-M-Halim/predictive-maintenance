@@ -1,30 +1,30 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import pickle
 import altair as alt
-import os
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
-# Load the model
+# Load model
 with open('dt.pkl', 'rb') as file:
     model = pickle.load(file)
 
 st.set_page_config(page_title="Equipment Failure Prediction", layout="wide")
 st.title("Equipment Failure Prediction Dashboard")
-st.markdown("A smart application to predict equipment failure based on oil and metal properties.")
+st.markdown("This app predicts equipment failure based on oil and metal properties.")
 
 # General Info
 st.markdown("## General Info")
 col1, col2 = st.columns(2)
 with col1:
-    Meter_Hr = st.number_input("Meter Hour", min_value=157.4, max_value=462.0, value=200.0)
-    Fluid_Brand = st.number_input("Fluid Brand", min_value=0, max_value=3, value=0)
-    Fluid_Type = st.number_input("Fluid Type", min_value=0, max_value=3, value=0)
-    Fluid_Weight = st.number_input("Fluid Weight", min_value=0, max_value=3, value=0)
+    Meter_Hr = st.number_input("Meter Hour", 157.4, 462.0, 200.0)
+    Fluid_Brand = st.number_input("Fluid Brand", 0, 3, 0)
+    Fluid_Type = st.number_input("Fluid Type", 0, 3, 0)
+    Fluid_Weight = st.number_input("Fluid Weight", 0, 3, 0)
     Filter_Change = st.selectbox("Filter Changed?", [0, 1])
     Fluid_Change = st.selectbox("Fluid Changed?", [0, 1])
 with col2:
-    Compressor_Meter_Hr = st.number_input("Compressor Meter Hour", min_value=134.8, max_value=379.3, value=200.0)
+    Compressor_Meter_Hr = st.number_input("Compressor Meter Hour", 134.8, 379.3, 200.0)
     Water_Present = st.selectbox("Water Present?", [0, 1])
     Antifreeze_Present = st.selectbox("Antifreeze Present?", [0, 1])
 
@@ -60,7 +60,7 @@ with col2:
     V100 = st.number_input("V100", 6.64, 13.17)
     V40 = st.number_input("V40", 44.24, 82.77)
 
-# Prepare input data
+# Prepare input
 input_data = pd.DataFrame([[
     Meter_Hr, Fluid_Brand, Fluid_Type, Fluid_Weight, Filter_Change, Fluid_Change,
     Compressor_Meter_Hr, Cu, Fe, Cr, Al, Si, Pb, Sn, Ni, Na, B, Zn, Mo, Ca, Mg, P,
@@ -71,44 +71,25 @@ input_data = pd.DataFrame([[
     'Mo', 'Ca', 'Mg', 'P', 'Water_Present', 'Antifreeze_Present', 'TBN', 'TAN', 'OXI', 'V100', 'V40'
 ])
 
-# Prediction
-if st.button("Predict Failure", key="predict_btn"):
+# Predict button
+if st.button("Predict Failure"):
     prediction = model.predict(input_data)
     label = "⚠️ Failure Expected" if prediction[0] == 1 else "✅ No Failure"
     st.success(f"Prediction: {label}")
 
-    # Wear Metals Dashboard
+    # Dashboard
     st.markdown("## Wear Metals Dashboard")
     st.markdown("### Input values vs. Normal value (1.0)")
-
-    wear_metals = {
-        "Cu (Copper)": Cu,
-        "Fe (Iron)": Fe,
-        "Pb (Lead)": Pb
-    }
-
+    wear_metals = {"Cu": Cu, "Fe": Fe, "Pb": Pb}
     col1, col2, col3 = st.columns(3)
-
     for i, (metal, value) in enumerate(wear_metals.items()):
-        df = pd.DataFrame({
-            "Type": ["Entered", "Normal"],
-            "Value": [value, 1.0]
-        })
-
+        df = pd.DataFrame({"Type": ["Entered", "Normal"], "Value": [value, 1.0]})
         chart = alt.Chart(df).mark_bar().encode(
             x=alt.X('Type', title=''),
             y=alt.Y('Value', title='Value'),
-            color=alt.Color('Type', scale=alt.Scale(
-                domain=["Entered", "Normal"],
-                range=["#FF6961", "#77DD77"]
-            )),
+            color=alt.Color('Type', scale=alt.Scale(domain=["Entered", "Normal"], range=["#FF6961", "#77DD77"])),
             tooltip=['Type', 'Value']
-        ).properties(
-            width=150,
-            height=250,
-            title=metal
-        )
-
+        ).properties(width=150, height=250, title=metal)
         if i == 0:
             col1.altair_chart(chart, use_container_width=True)
         elif i == 1:
@@ -116,15 +97,20 @@ if st.button("Predict Failure", key="predict_btn"):
         else:
             col3.altair_chart(chart, use_container_width=True)
 
-# Create a DataFrame with both input and prediction
-output_df = input_data.copy()
-output_df["prediction"] = prediction
+    # Save to Google Sheets
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_name(
+            "equipment-failure-4e43f8e3c7eb.json", scope
+        )
+        client = gspread.authorize(creds)
+        sheet = client.open("Equipment_Predictions").sheet1
+        row = list(input_data.iloc[0].values) + [int(prediction[0])]
+        sheet.append_row(row)
+        st.info("Prediction saved to Google Sheet ✅")
+    except Exception as e:
+        st.error(f"Failed to save to Google Sheet: {e}")
 
-# Save to CSV (overwrite or append based on your logic)
-csv_path = "prediction_result.csv"
-
-# You can choose to overwrite or append
-if os.path.exists(csv_path):
-    output_df.to_csv(csv_path, mode='a', index=False, header=False)
-else:
-    output_df.to_csv(csv_path, index=False)
+    # Link to Power BI report
+    powerbi_url = "https://app.powerbi.com/view?r=eyJrIjoiMDI3YzcyNDktMTJkOS00MTU2LTlmZmUtNzExMmQ3MTg2NTU3IiwidCI6Ijg1OTQ4YjFkLTZhOGQtNGIxNy1hMjVhLTliNjA0YmY2NDI2OCIsImMiOjh9"  # ⬅️ Replace with your actual URL
+    st.markdown(f"[🔗 View Dashboard in Power BI Online]({powerbi_url})", unsafe_allow_html=True)
