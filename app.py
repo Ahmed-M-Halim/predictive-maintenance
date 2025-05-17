@@ -3,6 +3,7 @@ import pandas as pd
 import pickle
 import altair as alt
 import gspread
+import json
 from oauth2client.service_account import ServiceAccountCredentials
 
 # Load model
@@ -100,9 +101,9 @@ if st.button("Predict Failure"):
     # Save to Google Sheets
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = ServiceAccountCredentials.from_json_keyfile_name(
-            "equipment-failure-4e43f8e3c7eb.json", scope
-        )
+        import json
+        creds_dict = st.secrets["gcp_service_account"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
         sheet = client.open("Equipment_Predictions").sheet1
         row = list(input_data.iloc[0].values) + [int(prediction[0])]
