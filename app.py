@@ -101,7 +101,6 @@ if st.button("Predict Failure"):
     # Save to Google Sheets
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        import json
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
@@ -113,5 +112,5 @@ if st.button("Predict Failure"):
         st.error(f"Failed to save to Google Sheet: {e}")
 
     # Link to Power BI report
-    powerbi_url = "https://app.powerbi.com/view?r=eyJrIjoiMDI3YzcyNDktMTJkOS00MTU2LTlmZmUtNzExMmQ3MTg2NTU3IiwidCI6Ijg1OTQ4YjFkLTZhOGQtNGIxNy1hMjVhLTliNjA0YmY2NDI2OCIsImMiOjh9"  # ⬅️ Replace with your actual URL
+    powerbi_url = "https://app.powerbi.com/view?r=eyJrIjoiMDI3YzcyNDktMTJkOS00MTU2LTlmZmUtNzExMmQ3MTg2NTU3IiwidCI6Ijg1OTQ4YjFkLTZhOGQtNGIxNy1hMjVhLTliNjA0YmY2NDI2OCIsImMiOjh9"
     st.markdown(f"[🔗 View Dashboard in Power BI Online]({powerbi_url})", unsafe_allow_html=True)
